@@ -2,84 +2,82 @@ import socket
 import threading
 import logging
 
-# Connection Data
-HOST = '127.0.0.1'
-PORT = 55555
+class ChatServer:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.clients = []
+        self.nicknames = []
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    handlers=[
-                        logging.FileHandler("/logs/server.log"),
-                        logging.StreamHandler()
-                    ])
-
-logger = logging.getLogger(__name__)
-
-
-# Starting Server
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((HOST, PORT))
-server.listen()
-
-# Lists For Clients and Their Nicknames
-clients = []
-nicknames = []
-
-# Sending Messages To All Connected Clients
-def broadcast(message):
-    for client in clients:
+    def start(self):
         try:
-            client.send(message)
+            self.server.bind((self.host, self.port))
+            self.server.listen()
+            logger.info("Server is listening on {}:{}".format(self.host, self.port))
+            self.receive_connections()
         except Exception as e:
-            logger.error(f"An error occurred while broadcasting message: {e}")
+            logger.error(f"An error occurred while starting the server: {e}")
+            raise
 
-# Handling Messages From Clients
-def handle(client):
-    while True:
+    def broadcast(self, message, client):
+        for c in self.clients:
+            if c != client:
+                try:
+                    c.send(message)
+                except Exception as e:
+                    logger.error(f"An error occurred while broadcasting message: {e}")
+
+    def handle_client(self, client):
+        while True:
+            try:
+                message = client.recv(1024)
+                self.broadcast(message, client)
+            except Exception as e:
+                logger.error(f"An error occurred while handling client: {e}")
+                index = self.clients.index(client)
+                self.remove_client(client, index)
+                break
+
+    def receive_connections(self):
+        while True:
+            try:
+                client, address = self.server.accept()
+                logger.info("Connected with {}".format(str(address)))
+
+                client.send('NICK'.encode('ascii'))
+                nickname = client.recv(1024).decode('ascii')
+                self.nicknames.append(nickname)
+                self.clients.append(client)
+
+                logger.info("Nickname '{}' joined!".format(nickname))
+                self.broadcast("{} joined!".format(nickname).encode('ascii'), client)
+                client.send('Connected to server!'.encode('ascii'))
+
+                thread = threading.Thread(target=self.handle_client, args=(client,))
+                thread.start()
+            except Exception as e:
+                logger.error(f"An error occurred while accepting connection: {e}")
+
+    def remove_client(self, client, index):
         try:
-            # Broadcasting Messages
-            message = client.recv(1024)
-            broadcast(message)
-        except Exception as e:
-            # Removing And Closing Clients
-            logger.error(f"An error occurred while handling client: {e}")
-            index = clients.index(client)
-            clients.remove(client)
+            nickname = self.nicknames[index]
+            self.broadcast('{} left!'.format(nickname).encode('ascii'), client)
+            self.nicknames.remove(nickname)
+            self.clients.remove(client)
             client.close()
-            nickname = nicknames[index]
-            broadcast('{} left!'.format(nickname).encode('ascii'))
-            nicknames.remove(nickname)
-            break
-
-# Receiving / Listening Function
-def receive():
-    while True:
-        try:
-            # Accept Connection
-            client, address = server.accept()
-            logger.info("Connected with {}".format(str(address)))
-
-            # Request And Store Nicknames
-            client.send('NICK'.encode('ascii'))
-            nickname = client.recv(1024).decode('ascii')
-            nicknames.append(nickname)
-            clients.append(client)
-
-            # Print And Broadcast Nickname
-            logger.info("Nickname is {}".format(nickname))
-            broadcast("{} joined!".format(nickname).encode('ascii'))
-            client.send('Connected to server!'.encode('ascii'))
-
-            # Start Handling Thread For Client
-            thread = threading.Thread(target=handle, args=(client,))
-            thread.start()
         except Exception as e:
-            logger.error(f"An error occurred while accepting connection: {e}")
+            logger.error(f"An error occurred while removing client: {e}")
 
 if __name__ == "__main__":
-    try:
-        logger.info("Server is listening...")
-        receive()
-    except Exception as e:
-        logger.error(f"An error occurred: {e}")
+    # Configure logging
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s [%(levelname)s] %(message)s',
+                        handlers=[
+                            logging.FileHandler("server.log"),
+                            logging.StreamHandler()
+                        ])
+    logger = logging.getLogger(__name__)
+    # Create and start the server
+    chat_server = ChatServer('127.0.0.1', 55555)
+    chat_server.start()

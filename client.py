@@ -12,9 +12,9 @@ class ChatClient:
     def connect_to_server(self):
         try:
             self.client.connect((self.host, self.port))
-            logging.info("Connected to server.")
+            logger.info("Connected to server.")
         except Exception as e:
-            logging.error(f"Error connecting to server: {e}")
+            logger.error(f"Error connecting to server: {e}")
             raise
 
     def receive(self):
@@ -25,9 +25,9 @@ class ChatClient:
                     self.client.send(self.nickname.encode('ascii'))
                 else:
                     print(message)
-                    logging.info(message)
+                    logger.info(message)
             except Exception as e:
-                logging.error(f"An error occurred while receiving messages: {e}")
+                logger.error(f"An error occurred while receiving messages: {e}")
                 self.client.close()
                 break
 
@@ -40,7 +40,7 @@ class ChatClient:
                 full_message = '{}: {}'.format(self.nickname, message)
                 self.client.send(full_message.encode('ascii'))
             except Exception as e:
-                logging.error(f"An error occurred while sending messages: {e}")
+                logger.error(f"An error occurred while sending messages: {e}")
                 self.client.close()
                 break
 
@@ -65,7 +65,7 @@ if __name__ == '__main__':
                             logging.FileHandler("client.log"),
                             logging.StreamHandler()
                         ])
-
+    logger = logging.getLogger(__name__)
     # Create and start the client
     chat_client = ChatClient('127.0.0.1', 55555)
     chat_client.start()
