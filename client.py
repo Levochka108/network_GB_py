@@ -2,55 +2,70 @@ import socket
 import threading
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s [%(levelname)s] %(message)s',
-                    handlers=[
-                        logging.FileHandler("logs/client.log"),
-                        logging.StreamHandler()
-                    ])
-logger = logging.getLogger(__name__)
+class ChatClient:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.nickname = input("Choose your nickname: ")
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-# Choosing Nickname
-nickname = input("Choose your nickname: ")
-
-# Connecting To Server
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client.connect(('127.0.0.1', 55555))
-
-# Listening to Server and Sending Nickname
-def receive():
-    while True:
+    def connect_to_server(self):
         try:
-            # Receive Message From Server
-            # If 'NICK' Send Nickname
-            message = client.recv(1024).decode('ascii')
-            if message == 'NICK':
-                client.send(nickname.encode('ascii'))
-            else:
-                print(message)
-                logger.info(message)
+            self.client.connect((self.host, self.port))
+            logging.info("Connected to server.")
         except Exception as e:
-            # Close Connection When Error
-            logger.error(f"An error occurred: {e}")
-            client.close()
-            break
+            logging.error(f"Error connecting to server: {e}")
+            raise
 
-def write():
-    while True:
+    def receive(self):
+        while True:
+            try:
+                message = self.client.recv(1024).decode('ascii')
+                if message == 'NICK':
+                    self.client.send(self.nickname.encode('ascii'))
+                else:
+                    print(message)
+                    logging.info(message)
+            except Exception as e:
+                logging.error(f"An error occurred while receiving messages: {e}")
+                self.client.close()
+                break
+
+    def send(self):
+        while True:
+            try:
+                message = input('Your message: ')
+                if message.lower() == 'exit':
+                    break
+                full_message = '{}: {}'.format(self.nickname, message)
+                self.client.send(full_message.encode('ascii'))
+            except Exception as e:
+                logging.error(f"An error occurred while sending messages: {e}")
+                self.client.close()
+                break
+
+    def start(self):
         try:
-            message = '{}: {}'.format(nickname, input(''))
-            client.send(message.encode('ascii'))
-        except Exception as e:
-            logger.error(f"An error occurred while sending message: {e}")
+            self.connect_to_server()
 
-# Starting Threads For Listening And Writing
+            receive_thread = threading.Thread(target=self.receive)
+            receive_thread.start()
+
+            send_thread = threading.Thread(target=self.send)
+            send_thread.start()
+
+        except Exception as e:
+            print(f"An error occurred! {e}")
+
 if __name__ == '__main__':
-    try:
-        receive_thread = threading.Thread(target=receive)
-        receive_thread.start()
+    # Configure logging
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s [%(levelname)s] %(message)s',
+                        handlers=[
+                            logging.FileHandler("client.log"),
+                            logging.StreamHandler()
+                        ])
 
-        write_thread = threading.Thread(target=write)
-        write_thread.start()
-    except Exception as e:
-        logger.error(f"An error occurred while starting threads: {e}")
+    # Create and start the client
+    chat_client = ChatClient('127.0.0.1', 55555)
+    chat_client.start()
